@@ -1,104 +1,186 @@
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator, Image, StyleSheet, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  FlatList,
+  Image,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 
 export default function Home() {
   //Cambios de estados
-  const [weather, setWeather] = useState<any>(null);
+  const [current, setCurrent] = useState<any>(null);
+  const [forecast, setForecast] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Datos para la consulta
   const city = "Madrid"; // Hardcoded para propositos de pruebas
   const apiKey = process.env.EXPO_PUBLIC_WEATHER_API_KEY;
-  const url = `https://api.openweathermap.org/data/2.5/weather?q=${city}&units=metric&appid=${apiKey}`;
+
+  // URLs para clima actual y predicción
+  const currentUrl = `https://api.openweathermap.org/data/2.5/weather?q=${city}&units=metric&appid=${apiKey}&lang=es`;
+  const forecastUrl = `https://api.openweathermap.org/data/2.5/forecast?q=${city}&units=metric&appid=${apiKey}&lang=es`;
 
   useEffect(() => {
-    fetch(url)
-      .then((response) => response.json())
-      .then((data) => {
-        setWeather(data);
+    Promise.all([fetch(currentUrl), fetch(forecastUrl)])
+      .then(async ([resCurrent, resForecast]) => {
+        const dataCurrent = await resCurrent.json();
+        const dataForecast = await resForecast.json();
+
+        setCurrent(dataCurrent);
+
+        // Filtramos para obtener solo un pronóstico por día (el de las 12:00 PM)
+        const dailyData = dataForecast.list.filter((reading: any) =>
+          reading.dt_txt.includes("12:00:00"),
+        );
+        setForecast(dailyData);
         setLoading(false);
-      });
-  }, [url]);
+      })
+      .catch((err) => console.error(err));
+  }, [currentUrl, forecastUrl]);
 
-  if (loading) {
+  if (loading)
     return (
-      <View style={styles.container}>
-        <ActivityIndicator size="large" color="#0000ff" />
-      </View>
+      <ActivityIndicator size="large" color="#0000ff" style={{ flex: 1 }} />
     );
-  }
 
+  {
+    /*
   // Construimos la URL del icono si tenemos los datos
   const iconUrl = weather?.weather?.[0]?.icon
     ? `https://openweathermap.org/img/wn/${weather.weather[0].icon}@4x.png`
     : null;
+  */
+  }
 
   return (
-    <View style={styles.container}>
-      {weather && weather.main ? (
-        <View style={styles.card}>
-          <Text style={styles.city}>{weather.name}</Text>
-          {/* AQUÍ ESTÁ EL ICONO DINÁMICO */}
-          {iconUrl && (
-            <Image source={{ uri: iconUrl }} style={styles.weatherIcon} />
-          )}
-          <Text style={styles.temp}>{Math.round(weather.main.temp)}°C</Text>
-          <Text style={styles.description}>
-            {weather.weather[0].description}
-          </Text>
-          <View style={styles.extraInfo}>
-            <Text>Humedad: {weather.main.humidity}%</Text>
-            <Text>Sensacion Termica: {weather.main.feels_like}°C</Text>
-            {/* <Text>Viento: {weather.main.wind_speed} m/s</Text> */}
-          </View>
-        </View>
-      ) : (
-        <Text>No se pudieron cargar los datos!</Text>
-      )}
-    </View>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={{ alignItems: "center", paddingVertical: 50 }}
+    >
+      {/* Seccion Hoy Resaltada */}
+      <View style={styles.mainCard}>
+        <Text style={styles.todayLabel}>HOY</Text>
+        <Text style={styles.city}>{current?.name}</Text>
+        <Image
+          source={{
+            uri: `https://openweathermap.org/img/wn/${current?.weather[0].icon}@4x.png`,
+          }}
+          style={styles.mainIcon}
+        />
+        <Text style={styles.mainTemp}>{Math.round(current?.main.temp)}°C</Text>
+        <Text style={styles.description}>
+          {current?.weather[0].description}
+        </Text>
+      </View>
+
+      {/* Seccion Semana */}
+      <View style={styles.forecastContainer}>
+        <Text style={styles.sectionTitle}>Próximos días (12:00 PM)</Text>
+        <FlatList
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          data={forecast}
+          keyExtractor={(item) => item.dt.toString()}
+          renderItem={({ item }) => {
+            // Formatear fecha para mostrar dia de la semana
+            const date = new Date(item.dt * 1000);
+            const dayName = date.toLocaleDateString("es-ES", {
+              weekday: "short",
+            });
+
+            return (
+              <View style={styles.forecastCard}>
+                <Text style={styles.forecastDay}>{dayName}</Text>
+                <Image
+                  source={{
+                    uri: `https://openweathermap.org/img/wn/${item.weather[0].icon}.png`,
+                  }}
+                  style={styles.smallIcon}
+                />
+                <Text style={styles.forecastTemp}>
+                  {Math.round(item.main.temp)}°
+                </Text>
+              </View>
+            );
+          }}
+        />
+      </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#2067a8",
-    alignItems: "center",
-    justifyContent: "center",
+    backgroundColor: "#101010",
   },
-  card: {
-    backgroundColor: "white",
+  mainCard: {
+    backgroundColor: "#1e1e1e",
+    width: "90%",
+    borderRadius: 30,
     padding: 30,
-    borderRadius: 20,
     alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 5,
+    marginBottom: 30,
+    borderWidth: 1,
+    borderColor: "#333",
+  },
+  todayLabel: {
+    color: "#00d4ff",
+    fontWeight: "bold",
+    letterSpacing: 2,
   },
   city: {
     fontSize: 24,
+    color: "white",
+    marginTop: 10,
+  },
+  mainIcon: {
+    width: 150,
+    height: 150,
+  },
+  mainTemp: {
+    fontSize: 80,
     fontWeight: "bold",
-  },
-  weatherIcon: {
-    width: 120,
-    height: 120,
-  },
-  temp: {
-    fontSize: 60,
-    fontWeight: "300",
-    marginVertical: 10,
+    color: "white",
   },
   description: {
     fontSize: 18,
-    color: "gray",
+    color: "#aaa",
     textTransform: "capitalize",
   },
-  extraInfo: {
-    marginTop: 20,
-    borderTopWidth: 1,
-    borderTopColor: "#eee",
-    paddingTop: 10,
+  forecastContainer: {
+    width: "100%",
+    paddingLeft: "5%",
+  },
+  sectionTitle: {
+    color: "white",
+    fontSize: 18,
+    marginBottom: 15,
+    fontWeight: "600",
+  },
+  forecastCard: {
+    backgroundColor: "#1e1e1e",
+    padding: 15,
+    borderRadius: 20,
+    alignItems: "center",
+    marginRight: 15,
+    width: 80,
+  },
+  forecastDay: {
+    color: "#aaa",
+    textTransform: "uppercase",
+    fontSize: 12,
+  },
+  smallIcon: {
+    width: 50,
+    height: 50,
+  },
+  forecastTemp: {
+    color: "white",
+    fontSize: 18,
+    fontWeight: "bold",
   },
 });
